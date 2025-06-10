@@ -2,14 +2,82 @@ import {MongoClient} from 'mongodb';
 import {v4 as uuidv4} from 'uuid';
 
 import initializeMongo from './init.js';
-
 initializeMongo();
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/notify';
 const DB_NAME = MONGODB_URI.split('/').pop();
 
-const BATCH_SIZE = 10_000;
-const NUM_DOCUMENTS_TO_INSERT = 1_000_000; // Default value
+let BATCH_SIZE = 10_000;
+let NUM_DOCUMENTS_TO_INSERT = 1_000_000;
+let NUM_CLIENTS = 7;
+let TIME_START = -300;
+let TIME_END = 1800;
+
+function handleNumberArgument(argName, argValue, currentValue, variableName, allowZeroOrNegative = false) {
+    const parsedValue = parseInt(argValue, 10);
+    if (!isNaN(parsedValue) && (allowZeroOrNegative || parsedValue > 0)) {
+        console.log(`[Populate] Overriding ${variableName} to: ${parsedValue}`);
+        return parsedValue;
+    } else {
+        console.warn(`[Populate] Invalid number provided for ${argName}. Using default ${variableName}: ${currentValue}`);
+        return currentValue;
+    }
+}
+
+const args = process.argv.slice(1);
+for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    let argName = arg;
+    let argValue = null;
+    let isEqualsSeparated = false;
+
+    if (arg.includes('=')) {
+        isEqualsSeparated = true;
+        [argName, argValue] = arg.split('=', 2);
+    } else {
+        argValue = args[i + 1];
+    }
+
+    switch (argName) {
+        case '--number':
+        case '-n': {
+            NUM_DOCUMENTS_TO_INSERT = handleNumberArgument(argName, argValue, NUM_DOCUMENTS_TO_INSERT, 'NUM_DOCUMENTS_TO_INSERT');
+            if (!isEqualsSeparated) i++;
+            break;
+        }
+        case '--batch':
+        case '-b': {
+            BATCH_SIZE = handleNumberArgument(argName, argValue, BATCH_SIZE, 'BATCH_SIZE');
+            if (!isEqualsSeparated) i++;
+            break;
+        }
+        case '--clients':
+        case '-c': {
+            NUM_CLIENTS = handleNumberArgument(argName, argValue, NUM_CLIENTS, 'NUM_CLIENTS');
+            if (!isEqualsSeparated) i++;
+            break;
+        }
+        case '--start':
+        case '-s': {
+            TIME_START = handleNumberArgument(argName, argValue, TIME_START, 'TIME_START', true);
+            if (!isEqualsSeparated) i++;
+            break;
+        }
+        case '--end':
+        case '-e': {
+            TIME_END = handleNumberArgument(argName, argValue, TIME_END, 'TIME_END', true);
+            if (!isEqualsSeparated) i++;
+            break;
+        }
+        default:
+            console.warn(`[Populate] Unrecognized argument: ${arg}. Skipping.`);
+    }
+}
+
+if (TIME_END < TIME_START) {
+    console.warn(`[Populate] TIME_END (${TIME_END}) cannot be less than TIME_START (${TIME_START}). Adjusting TIME_END to TIME_START.`);
+    TIME_END = TIME_START;
+}
 
 async function populateNotifications() {
     let client;
@@ -25,25 +93,25 @@ async function populateNotifications() {
         const startTime = new Date();
         let documentsInserted = 0;
 
+        const now = new Date().getTime();
+        const start = now + TIME_START * 1000;
+        const end = now + TIME_END * 1000;
+        const diff = end - start;
         while (documentsInserted < NUM_DOCUMENTS_TO_INSERT) {
             const batch = [];
             const currentBatchSize = Math.min(BATCH_SIZE, NUM_DOCUMENTS_TO_INSERT - documentsInserted);
 
             for (let i = 0; i < currentBatchSize; i++) {
                 const notificationId = uuidv4();
-                const clientId = `client_${Math.floor(Math.random() * 10000)}`;
-                // Use a future time for "delayed" notifications
-                // Current time is Tuesday, June 10, 2025 at 5:52:03 PM EEST.
-                // Let's set notifications to be sent within the next 30 days from now (June 10, 2025)
-                const now = new Date('2025-06-10T17:52:03Z'); // Use a fixed time for consistency in simulation
-                const futureTimeMillis = now.getTime() + Math.floor(Math.random() * 86400000 * 30); // Random time in next 30 days
+                const clientId = `client_${Math.floor(Math.random() * NUM_CLIENTS)}`;
+                const time = start + Math.floor(Math.random() * diff);
 
                 batch.push({
                     _id: notificationId,
                     clientId: clientId,
-                    time: futureTimeMillis, // Future timestamp
+                    time: time, // Future timestamp
                     status: "PENDING",       // New status for delayed notifications
-                    text: `Delayed notification for ${clientId} at ${new Date(futureTimeMillis).toISOString()} - message #${documentsInserted + i + 1}`,
+                    text: `Delayed notification for ${clientId} at ${new Date(time).toISOString()} - message #${documentsInserted + i + 1}`,
                     createdAt: new Date(),
                     updatedAt: new Date()
                 });

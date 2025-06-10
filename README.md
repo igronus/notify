@@ -45,8 +45,26 @@ Implemented with mongodb8 and node22.
 
 Use `docker compose up` to start the containers.
 
-The following command will populate the DB with 1M records.
+### DB populating
+
+The following command will populate the DB with the default values (1M records).
 
 ```
 docker exec notify-app node populate
+```
+
+You can use the following options to tune up the notification populating:
+
+| Name                           | Option        | Short option | Default value  |
+|--------------------------------|---------------|--------------|----------------|
+| Quantity                       | --number=<N>  | -n <N>       | 1,000,000      |
+| Batch size                     | --batch=<N>   | -b <N>       | 10,000         |
+| Clients number                 | --clients=<N> | -c <N>       | 7              |
+| Start time (seconds, from now) | --start=<N>   | -s <N>       | -300 (-5 min)  |
+| End time (seconds, from now)   | --end=<N>     | -e <N>       | 1,800 (30 min) |
+
+I.e. something like that to fill up 1B records for 1024 clients from -day to +week:
+
+```
+docker exec notify-app node populate -n 1000000000 -c 1024 --start=-86400 --end=604800
 ```
