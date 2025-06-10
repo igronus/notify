@@ -36,3 +36,17 @@ your choice.
 * Provide a working codebase for both server and client.
 * Include a README or deployment guide.
 * Ideally, the project should be runnable locally using Docker and/or Docker Compose.
+
+## Solution
+
+Implemented with mongodb8 and node22.
+
+### Running
+
+Use `docker compose up` to start the containers.
+
+The following command will populate the DB with 1M records.
+
+```
+docker exec notify-app node populate
+```

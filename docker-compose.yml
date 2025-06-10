@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mongo:
     image: mongo:8.0
@@ -12,6 +10,18 @@ services:
     networks:
       - mongo-network
     restart: always
+
+  notify-app:
+    build: ./app
+    container_name: notify-app
+    ports:
+      - "3000:3000"
+    networks:
+      - mongo-network
+    depends_on:
+      - mongo
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/notify
 
 volumes:
   mongo-data:
