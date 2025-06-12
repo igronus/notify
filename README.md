@@ -39,7 +39,7 @@ your choice.
 
 ## Solution
 
-Implemented with mongodb8 and node22.
+Implemented with mongodb8 and node22. Notification dispatching is done via WebSockets.
 
 ### Running
 
@@ -81,4 +81,81 @@ Getting a notification:
 
 ```
 curl http://127.0.0.1:3000/notifications/<ID>
+```
+
+Client connection:
+
+```
+docker exec notify-app node <CLIENT_ID>
+```
+
+Client IDs are `client_0`, `client_1`, ... `client_6` by default if you have used the populate feature.
+
+### Statistics collection
+
+```js
+db.notifications.aggregate([
+  {
+    // Stage 1: Group documents by 'clientId'
+    $group: {
+      _id: "$clientId", // Group by the 'clientId' field
+      totalNotifications: { $sum: 1 }, // Total count for this client
+      pendingNotifications: {
+        $sum: {
+          $cond: [
+            { $eq: ["$status", "PENDING"] }, // If status is "PENDING"
+            1,                               // add 1 to pendingNotifications
+            0                                // otherwise add 0
+          ]
+        }
+      },
+      sentNotifications: {
+        $sum: {
+          $cond: [
+            { $eq: ["$status", "SENT"] }, // If status is "SENT"
+            1,                             // add 1 to sentNotifications
+            0                              // otherwise add 0
+          ]
+        }
+      }
+    }
+  },
+  {
+    // Stage 2: Sort the results by 'totalNotifications' in descending order
+    $sort: {
+      totalNotifications: -1 // -1 for descending, 1 for ascending
+    }
+  },
+  {
+    // Stage 3 (Optional): Limit the results if you only want the top N clients
+    $limit: 10 // Get the top 10 clients by total notification count
+  },
+  {
+    // Stage 4 (Optional): Project (rename) the _id field to something more readable
+    $project: {
+      _id: 0, // Exclude the default _id field from the output
+      clientId: "$_id", // Rename the grouped _id field to 'clientId'
+      totalNotifications: 1, // Include the totalNotifications field
+      pendingNotifications: 1, // Include the pendingNotifications field
+      sentNotifications: 1 // Include the sentNotifications field
+    }
+  }
+]);
+```
+
+The output would be something similiar to this:
+
+```
+{
+  totalNotifications: 168597,
+  pendingNotifications: 162998,
+  sentNotifications: 5599,
+  clientId: 'client_0'
+}
+{
+  totalNotifications: 167972,
+  pendingNotifications: 167794,
+  sentNotifications: 178,
+  clientId: 'client_1'
+}
 ```
