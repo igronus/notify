@@ -53,7 +53,7 @@ docker exec notify-app node client client_<N>
 
 ### Tech stack
 
-Implemented with mongodb8 and node22. Notification dispatching is done via WebSockets, strategy is At-Least-Once.
+Implemented with mongodb8 and node22. Notification dispatching is done via WebSockets, strategy is At-Most-Once.
 
 ### Running
 
@@ -105,7 +105,10 @@ docker exec notify-app node client <CLIENT_ID>
 
 Client IDs are `client_0`, `client_1`, ... `client_6` by default if you have used the populate feature.
 
-### Statistics collection
+### Statistics obtaining
+
+You can run `cat app/mongo.js | docker compose exec -T mongo mongosh mongodb://mongo:27017/notify`
+to execute the following query:
 
 ```js
 db.notifications.aggregate([
@@ -179,8 +182,10 @@ The output would be something similiar to this:
 
 There are a lot of things to improve the app within this implementation, amongst them starting from the most important:
 
-* Predict the snowball effect and alert on that, i.e. if the new notifications are created faster than they could be
-delivered (or were created before and will take a lot of time to dispatch)
-* Ability to tune up the batch size for server, setting up the checkAndSendPendingNotifications interval
+* Ability to tune up the batch size for server and setting up the checkAndSendPendingNotifications interval
+* Aligning clients' queues, e.g. to not delay other clients' messages due to one's huge amount
+* Monitoring system, probably external, maybe even predicting the snowball effect and alert on that, 
+i.e. if the new notifications are created faster than they could be delivered
+(or were created before and will take a lot of time to dispatch)
 * Client: reconnect on lost connection, unhardcode WS URL
-* Refactor the init code to use the existing connection
+* Refactor the init code to use the existing connection, log system with levels etc

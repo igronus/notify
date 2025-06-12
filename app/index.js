@@ -80,34 +80,19 @@ async function startServer() {
             });
         });
 
-        /**
-         * Sends a notification message to a specific connected WebSocket client.
-         * This function should be called from wherever you trigger notifications (e.g., a cron job checking DB).
-         * @param {string} clientId - The ID of the client to send the notification to.
-         * @param {object} notificationData - The notification payload to send.
-         */
-        async function sendNotificationToClient(clientId, notificationData) {
-            const clientWs = clients.get(clientId);
-            if (clientWs && clientWs.readyState === WebSocket.OPEN) {
-                clientWs.send(JSON.stringify({ type: 'notification', data: notificationData }));
-                console.log(`[WS] Pushed notification to client ${clientId}: ${notificationData._id}`);
-            }
-        }
-
         async function checkAndSendPendingNotifications() {
             if (isNotificating) {
                 return;
-            };
+            }
+            isNotificating = true;
 
             const now = Date.now();
             const BATCH_PROCESS_LIMIT = 1000; // Define how many notifications to process per interval
 
-            // Get the list of currently connected client IDs from your 'clients' Map
             const connectedClientIds = Array.from(clients.keys()); // Convert Map keys (clientIds) to an array
-
             if (connectedClientIds.length === 0) {
-                // console.log("[WS] No clients connected. Skipping notification check."); // Uncomment for debugging
-                return; // No need to query DB if no one is connected
+                isNotificating = false;
+                return;
             }
 
             // Find notifications that are PENDING, whose 'time' has passed,
@@ -121,17 +106,13 @@ async function startServer() {
                 .toArray();
 
             if (pendingAndDueNotifications.length === 0) {
-                // console.log("[WS] No pending due notifications for connected clients."); // Uncomment for debugging
+                isNotificating = false;
                 return;
             }
 
             console.log(`[WS] Found ${pendingAndDueNotifications.length} due notifications for connected clients. Processing...`);
 
             for (const notification of pendingAndDueNotifications) {
-                // sendNotificationToClient already handles the check if clientWs is open,
-                // but now we're more confident they should be, due to the $in query.
-                await sendNotificationToClient(notification.clientId, notification);
-
                 // Mark notification as SENT or PROCESSED in the database
                 await notificationsCollection.updateOne(
                     { _id: notification._id },
@@ -139,6 +120,19 @@ async function startServer() {
                 );
                 console.log(`[WS] Notification ${notification._id} marked as SENT.`);
                 notificationsCount++;
+
+                const clientWs = clients.get(notification.clientId);
+                if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ type: 'notification', data: notification }));
+                    console.log(`[WS] Pushed notification to client ${notification.clientId}: ${notification._id}`);
+                } else {
+                    // client has gone away
+                    await notificationsCollection.updateOne(
+                        { _id: notification._id },
+                        { $set: { status: "LOST", deliveredAt: new Date() } }
+                    );
+                    console.log(`[WS] Notification ${notification._id} marked as LOST.`);
+                }
             }
 
             isNotificating = false;
