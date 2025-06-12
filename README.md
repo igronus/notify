@@ -68,3 +68,17 @@ I.e. something like that to fill up 1B records for 1024 clients from -day to +we
 ```
 docker exec notify-app node populate -n 1000000000 -c 1024 --start=-86400 --end=604800
 ```
+
+### Usage
+
+Creating a notification:
+
+```
+curl -X POST -H "Content-Type: application/json" -d '{"clientId": "client999", "time": 1750000000000, "text": "test"}' http://127.0.0.1:3000/notifications
+```
+
+Getting a notification:
+
+```
+curl http://127.0.0.1:3000/notifications/<ID>
+```
