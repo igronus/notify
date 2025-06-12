@@ -39,7 +39,21 @@ your choice.
 
 ## Solution
 
-Implemented with mongodb8 and node22. Notification dispatching is done via WebSockets.
+### TL;DR
+
+The shortest way to get the past notifications and subscribe to the new ones:
+
+```
+docker compose up -d
+docker exec notify-app node populate -n 10000
+docker exec notify-app node client client_0
+# on another terminal you will get notifications up to client_6 by default
+docker exec notify-app node client client_<N>
+```
+
+### Tech stack
+
+Implemented with mongodb8 and node22. Notification dispatching is done via WebSockets, strategy is At-Least-Once.
 
 ### Running
 
@@ -86,7 +100,7 @@ curl http://127.0.0.1:3000/notifications/<ID>
 Client connection:
 
 ```
-docker exec notify-app node <CLIENT_ID>
+docker exec notify-app node client <CLIENT_ID>
 ```
 
 Client IDs are `client_0`, `client_1`, ... `client_6` by default if you have used the populate feature.
@@ -158,4 +172,15 @@ The output would be something similiar to this:
   sentNotifications: 178,
   clientId: 'client_1'
 }
+...
 ```
+
+#### TODO
+
+There are a lot of things to improve the app within this implementation, amongst them starting from the most important:
+
+* Predict the snowball effect and alert on that, i.e. if the new notifications are created faster than they could be
+delivered (or were created before and will take a lot of time to dispatch)
+* Ability to tune up the batch size for server, setting up the checkAndSendPendingNotifications interval
+* Client: reconnect on lost connection, unhardcode WS URL
+* Refactor the init code to use the existing connection

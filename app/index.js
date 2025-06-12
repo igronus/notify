@@ -19,6 +19,10 @@ let dbClient; // Store the MongoDB client instance globally
 const clients = new Map();
 let notificationsCollection; // Store the collection instance globally
 
+let isNotificating = false;
+let notificationsCount = 0;
+let startTime = Date.now();
+
 // Middleware to parse JSON request bodies
 app.use(express.json());
 
@@ -91,6 +95,10 @@ async function startServer() {
         }
 
         async function checkAndSendPendingNotifications() {
+            if (isNotificating) {
+                return;
+            };
+
             const now = Date.now();
             const BATCH_PROCESS_LIMIT = 1000; // Define how many notifications to process per interval
 
@@ -130,10 +138,14 @@ async function startServer() {
                     { $set: { status: "SENT", deliveredAt: new Date() } }
                 );
                 console.log(`[WS] Notification ${notification._id} marked as SENT.`);
+                notificationsCount++;
             }
+
+            isNotificating = false;
         }
 
         setInterval(checkAndSendPendingNotifications, 100);
+        setInterval(printStats, 10000);
         console.log('[WebServer] Started periodic check for pending notifications.');
 
         // POST /notifications
@@ -206,12 +218,21 @@ async function startServer() {
     }
 }
 
+function printStats()
+{
+    console.log(`[WebServer] [Statistics] Total notifications: ${notificationsCount}`);
+    if (notificationsCount > 0) {
+        console.log(`[WS Client] [Statistics] Average speed (per second): ${notificationsCount / ((Date.now() - startTime) / 1000)}`);
+    }
+}
+
 // Call the async function to start the server
 startServer().catch(console.error);
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
     console.log('[WebServer] SIGINT received. Closing MongoDB connection...');
+    printStats();
     if (dbClient) {
         wss.close(); // Close WebSocket server gracefully
         await dbClient.close();
@@ -222,6 +243,7 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
     console.log('[WebServer] SIGTERM received. Closing MongoDB connection...');
+    printStats();
     if (dbClient) {
         wss.close(); // Close WebSocket server gracefully
         await dbClient.close();
